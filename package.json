@@ -1,0 +1,50 @@
+{
+  "name": "pi-vision-tool",
+  "version": "0.1.0",
+  "description": "Give text-only pi models vision — a native vision_tool that analyzes images via a multi-backend vision model chain (Step-3.7-Flash → GLM → Qwen) with auto-fallback, timeout and retry",
+  "type": "module",
+  "author": "like_attract",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/like-attract/pi-vision-tool.git"
+  },
+  "homepage": "https://github.com/like-attract/pi-vision-tool#readme",
+  "bugs": {
+    "url": "https://github.com/like-attract/pi-vision-tool/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-coding-agent",
+    "extension",
+    "vision",
+    "image",
+    "multimodal",
+    "deepseek",
+    "qwen",
+    "glm",
+    "step"
+  ],
+  "files": [
+    "vision-tool.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.74.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  },
+  "pi": {
+    "extensions": [
+      "./vision-tool.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.74.0"
+  }
+}
