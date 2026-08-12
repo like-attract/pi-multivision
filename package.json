@@ -7,11 +7,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/like-attract/pi-vision-tool.git"
+    "url": "git+https://github.com/like-attract/pi-multivision.git"
   },
-  "homepage": "https://github.com/like-attract/pi-vision-tool#readme",
+  "homepage": "https://github.com/like-attract/pi-multivision#readme",
   "bugs": {
-    "url": "https://github.com/like-attract/pi-vision-tool/issues"
+    "url": "https://github.com/like-attract/pi-multivision/issues"
   },
   "keywords": [
     "pi-package",

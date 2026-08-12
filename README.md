@@ -39,7 +39,7 @@ pi install npm:pi-multivision
 From GitHub:
 
 ```bash
-pi install git:github.com/like-attract/pi-vision-tool
+pi install git:github.com/like-attract/pi-multivision
 ```
 
 Then `/reload` (or restart pi).
@@ -53,7 +53,7 @@ node vision.js <image...> --prompt "question" --json [--timeout seconds]
 # stdout: { "text": "...", "provider": "...", "model": "...", "usage": {...} }
 ```
 
-Default location: `~/.agents/skills/vision/vision.js` (the [pi vision skill](https://github.com/like-attract/pi-vision-tool#readme) layout). If yours lives elsewhere, point the extension at it:
+Default location: `~/.agents/skills/vision/vision.js` (the [pi vision skill](https://github.com/like-attract/pi-multivision#readme) layout). If yours lives elsewhere, point the extension at it:
 
 ```bash
 export VISION_SCRIPT=/path/to/your/vision.js
