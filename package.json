@@ -1,5 +1,5 @@
 {
-  "name": "pi-vision-tool",
+  "name": "pi-multivision",
   "version": "0.1.0",
   "description": "Give text-only pi models vision — a native vision_tool that analyzes images via a multi-backend vision model chain (Step-3.7-Flash → GLM → Qwen) with auto-fallback, timeout and retry",
   "type": "module",

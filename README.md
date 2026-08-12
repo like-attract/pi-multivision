@@ -1,12 +1,13 @@
 <div align="center">
 
-# 👁️ pi-vision-tool
+# 👁️ pi-multivision
 
 **Give text-only [pi](https://github.com/earendil-works/pi-coding-agent) models vision**
 
 _One native tool call — a multi-backend vision model chain with automatic fallback._
 
 [![pi extension](https://img.shields.io/badge/pi-extension-blueviolet)](https://github.com/earendil-works/pi-coding-agent)
+[![npm](https://img.shields.io/npm/v/pi-multivision)](https://www.npmjs.com/package/pi-multivision)
 [![license](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
 </div>
@@ -19,7 +20,7 @@ Some of the best coding models are blind. You paste a screenshot, a UI mock, or 
 
 ## The Solution
 
-`pi-vision-tool` registers a **native tool** (`vision_tool`) that any text-only model can call directly — no remembering to use a skill, no shelling out manually. The extension hands the image to a vision-capable model and returns the text description as the tool result.
+`pi-multivision` registers a **native tool** (`vision_tool`) that any text-only model can call directly — no remembering to use a skill, no shelling out manually. The extension hands the image to a vision-capable model and returns the text description as the tool result.
 
 - **🔌 Multi-backend with auto-fallback** — Step-3.7-Flash (ModelScope) → GLM-4.6V-Flash (Zhipu) → Qwen3.6-Chat (USTC-LLM). If a backend is rate-limited, times out, or returns an empty response, the next one is tried automatically.
 - **⏱️ Timeout & retry** — per-request timeout (240s default, configurable), rate-limit backoff, and empty-response fallback. Slow models fail fast with a clear message instead of hanging.
@@ -28,6 +29,14 @@ Some of the best coding models are blind. You paste a screenshot, a UI mock, or 
 - **🔧 BYO vision script** — the extension shells out to a small vision script (default `~/.agents/skills/vision/vision.js`), overridable via the `VISION_SCRIPT` env var. Bring your own providers/keys.
 
 ## Installation
+
+From npm (recommended):
+
+```bash
+pi install npm:pi-multivision
+```
+
+From GitHub:
 
 ```bash
 pi install git:github.com/like-attract/pi-vision-tool
@@ -44,7 +53,7 @@ node vision.js <image...> --prompt "question" --json [--timeout seconds]
 # stdout: { "text": "...", "provider": "...", "model": "...", "usage": {...} }
 ```
 
-Default location: `~/.agents/skills/vision/vision.js` (the [pi vision skill](https://github.com/like-attract/pi-vision-tool) layout). If yours lives elsewhere, point the extension at it:
+Default location: `~/.agents/skills/vision/vision.js` (the [pi vision skill](https://github.com/like-attract/pi-vision-tool#readme) layout). If yours lives elsewhere, point the extension at it:
 
 ```bash
 export VISION_SCRIPT=/path/to/your/vision.js
@@ -102,7 +111,7 @@ vision_tool(imagePath="screenshot.png", prompt="识别图中所有文字")
 
 ## Why not pi-vision-handoff?
 
-[pi-vision-handoff](https://github.com/monotykamary/pi-vision-handoff) intercepts image blocks at the `context` event and swaps them for descriptions automatically — great if you want zero-visible-tool behavior. `pi-vision-tool` takes the opposite approach: an **explicit native tool** with a hardened multi-backend chain (timeout, retry, empty-response fallback) that the model calls on demand. Trade-off: you see the tool call in the transcript (auditable), and you keep full control over which backend is used.
+[pi-vision-handoff](https://github.com/monotykamary/pi-vision-handoff) intercepts image blocks at the `context` event and swaps them for descriptions automatically — great if you want zero-visible-tool behavior. `pi-multivision` takes the opposite approach: an **explicit native tool** with a hardened multi-backend chain (timeout, retry, empty-response fallback) that the model calls on demand. Trade-off: you see the tool call in the transcript (auditable), and you keep full control over which backend is used.
 
 ## License
 
