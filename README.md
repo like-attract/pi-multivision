@@ -107,7 +107,7 @@ vision_tool(imagePath="screenshot.png", prompt="识别图中所有文字")
 | Setting | Where | Default |
 |---------|-------|---------|
 | Vision script path | `VISION_SCRIPT` env var | `~/.agents/skills/vision/vision.js` |
-| Per-request timeout | edit `VISION_TIMEOUT_S` in `vision-tool.ts` | 240 s |
+| Per-request timeout | edit `VISION_TIMEOUT_S` in `multivision.ts` | 240 s |
 
 ## Why not pi-vision-handoff?
 
