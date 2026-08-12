@@ -20,7 +20,7 @@ Some of the best coding models are blind. You paste a screenshot, a UI mock, or 
 
 ## The Solution
 
-`pi-multivision` registers a **native tool** (`vision_tool`) that any text-only model can call directly — no remembering to use a skill, no shelling out manually. The extension hands the image to a vision-capable model and returns the text description as the tool result.
+`pi-multivision` registers a **native tool** (`multivision`) that any text-only model can call directly — no remembering to use a skill, no shelling out manually. The extension hands the image to a vision-capable model and returns the text description as the tool result.
 
 - **🔌 Multi-backend with auto-fallback** — Step-3.7-Flash (ModelScope) → GLM-4.6V-Flash (Zhipu) → Qwen3.6-Chat (USTC-LLM). If a backend is rate-limited, times out, or returns an empty response, the next one is tried automatically.
 - **⏱️ Timeout & retry** — per-request timeout (240s default, configurable), rate-limit backoff, and empty-response fallback. Slow models fail fast with a clear message instead of hanging.
@@ -44,19 +44,55 @@ pi install git:github.com/like-attract/pi-multivision
 
 Then `/reload` (or restart pi).
 
-## Requirements
+## Requirements & Configuration
 
-The extension needs a "vision script" that turns image paths into descriptions:
+> **First use requires explicit configuration.** pi-multivision ships with **no default model** —
+> your providers/keys stay in your own config files, nothing is baked into the extension.
+
+### 1. Extension config (where the vision script lives)
+
+The extension reads a JSON config, from either:
+
+- `VISION_CONFIG` env var, or
+- `~/.pi/agent/pi-multivision.json` (default)
+
+```json
+{
+  "visionScript": "/path/to/vision.js",
+  "configPath": "/path/to/models.json",
+  "timeout": 240
+}
+```
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `visionScript` | ✅ | Script that turns image paths into a text description (protocol below) |
+| `configPath` | — | Passed to the script as `--config` (model selection & order, see §2) |
+| `timeout` | — | Per-request timeout in seconds (default 240) |
+
+If no config is found, the tool returns a step-by-step setup guide instead of guessing.
+
+### 2. Model selection & order (in the script's config)
+
+The vision script reads its own model config (the file you pass via `configPath`).
+**The key order of `providers` is the try order** — failures automatically fall through to the next:
+
+```json
+{
+  "providers": {
+    "first":  { "baseUrl": "https://.../v1", "apiKey": "sk-...", "defaultModel": "vision-model-a", "models": ["vision-model-a"] },
+    "second": { "baseUrl": "https://.../v1", "apiKey": "sk-...", "defaultModel": "vision-model-b", "models": ["vision-model-b"] }
+  }
+}
+```
+
+### 3. vision script protocol
+
+The script must accept:
 
 ```
-node vision.js <image...> --prompt "question" --json [--timeout seconds]
+node vision.js <image...> --prompt "question" --json [--timeout seconds] [--config path]
 # stdout: { "text": "...", "provider": "...", "model": "...", "usage": {...} }
-```
-
-Default location: `~/.agents/skills/vision/vision.js` (the [pi vision skill](https://github.com/like-attract/pi-multivision#readme) layout). If yours lives elsewhere, point the extension at it:
-
-```bash
-export VISION_SCRIPT=/path/to/your/vision.js
 ```
 
 A minimal example script (OpenAI-compatible):
@@ -99,15 +135,8 @@ Just ask. The model calls the tool itself:
 Or force it in a session with any image path:
 
 ```
-vision_tool(imagePath="screenshot.png", prompt="识别图中所有文字")
+multivision(imagePath="screenshot.png", prompt="识别图中所有文字")
 ```
-
-## Configuration
-
-| Setting | Where | Default |
-|---------|-------|---------|
-| Vision script path | `VISION_SCRIPT` env var | `~/.agents/skills/vision/vision.js` |
-| Per-request timeout | edit `VISION_TIMEOUT_S` in `multivision.ts` | 240 s |
 
 ## Why not pi-vision-handoff?
 
