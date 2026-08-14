@@ -138,6 +138,19 @@ Or force it in a session with any image path:
 multivision(imagePath="screenshot.png", prompt="识别图中所有文字")
 ```
 
+## Agent Usage Guidelines（模型行为准则）
+
+Text-only models **must call `multivision` immediately, without waiting for the user to ask**, when any of these triggers occur:
+
+1. **Image omitted from context** — the message shows `image omitted: model does not support images`, `(image omitted)`, `[图片已省略]`, or similar markers. This means the image was stripped because the model cannot see it natively.
+2. **User supplied an image** — an image path, an image URL, or phrasing like "look at this screenshot / 看图 / 识图 / OCR / 看这个界面".
+3. **A "seeing" task is involved** — UI screenshots, error dialogs, flowcharts, diagrams, scanned documents, multi-image comparison.
+4. **User asks "what is this?"** while an image attachment is present in the conversation.
+
+If the image path is unknown: search common locations first (`%TEMP%`, session dir, cwd) for `png/jpg/webp` files, then call the tool. If still not found, **ask the user for the path** rather than skipping the analysis.
+
+> This guideline is also mirrored in the `vision` skill (SKILL.md) which is the canonical reference.
+
 ## Why not pi-vision-handoff?
 
 [pi-vision-handoff](https://github.com/monotykamary/pi-vision-handoff) intercepts image blocks at the `context` event and swaps them for descriptions automatically — great if you want zero-visible-tool behavior. `pi-multivision` takes the opposite approach: an **explicit native tool** with a hardened multi-backend chain (timeout, retry, empty-response fallback) that the model calls on demand. Trade-off: you see the tool call in the transcript (auditable), and you keep full control over which backend is used.

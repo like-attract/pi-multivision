@@ -107,8 +107,14 @@ export default function (pi: ExtensionAPI) {
     name: "multivision",
     label: "Multivision",
     description:
-      "分析本地图片文件并返回文字描述。当前模型无法直接看图片时使用：" +
-      "传入图片路径（相对或绝对）和一个问题，工具会按 pi-multivision 配置的视觉模型链" +
+      "分析本地图片文件并返回文字描述，是本模型的'眼睛'。" +
+      "【强制触发条件：出现以下任一情况必须立即调用本工具，无需用户提醒】" +
+      "1) 消息中的图片显示为 image omitted / model does not support images / 图片已省略 等标记（说明图片被省略，你无法直接查看）；" +
+      "2) 用户提供了图片路径、图片 URL，或要求查看截图/图表/识图/OCR；" +
+      "3) 上下文涉及 UI 截图、报错弹窗、流程图、多图对比等需要'看'的场景；" +
+      "4) 用户问'这是什么/看看这个'而上下文里有图片附件。" +
+      "若没有图片路径，先搜索 Temp 目录、会话目录、当前目录中的 png/jpg/webp 截图再调用；找不到则主动询问用户。" +
+      "用法：传入图片路径（相对或绝对）和一个问题，工具会按 pi-multivision 配置的视觉模型链" +
       "（见 ~/.pi/agent/pi-multivision.json 或 VISION_CONFIG）分析图片并返回结果。" +
       "适合：描述图片内容、OCR 识别文字、检查 UI 截图、分析图表/流程图。",
     parameters: Type.Object({
