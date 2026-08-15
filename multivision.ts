@@ -32,7 +32,7 @@
  *
  * 安装：pi install npm:pi-multivision
  * ============================================================ */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { execFile } from "node:child_process";
 import { homedir } from "node:os";
@@ -128,7 +128,7 @@ export default function (pi: ExtensionAPI) {
         Type.Array(Type.String(), { description: "多张图片路径，用于对比或综合分析" }),
       ),
     }),
-    async execute(_toolCallId, params) {
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx: ExtensionContext) {
       const { cfg, error } = loadExtConfig();
       if (error) {
         return { content: [{ type: "text", text: `pi-multivision 配置错误：${error}` }], details: {} };
@@ -159,21 +159,49 @@ export default function (pi: ExtensionAPI) {
       const args = [...paths, "--prompt", prompt, "--json", "--timeout", String(timeoutS)];
       if (cfg.configPath) args.push("--config", cfg.configPath);
 
-      const { ok, stdout, stderr } = await runVision(cfg.visionScript, args, timeoutS * 1000 + 60_000);
-      if (!ok) {
-        return {
-          content: [{ type: "text", text: `视觉分析失败：${stderr || "未知错误"}` }],
-          details: {},
-        };
-      }
+      // 进度显示：pi-web/TUI 支持 setWidget（编辑器上方/下方）与 setStatus（状态栏）
+      const names = paths.map((p) => p.split(/[\\/]/).pop() ?? p).join(", ");
+      const showProgress = () => {
+        try {
+          ctx.ui.setWidget("multivision", [
+            "◆ 视觉分析中",
+            `  图片: ${names}`,
+            `  模型链请求中（超时 ${timeoutS}s，失败自动切换）`,
+          ]);
+          ctx.ui.setStatus("multivision", "视觉分析中…");
+        } catch {
+          /* UI 不可用时忽略 */
+        }
+      };
+      const clearProgress = () => {
+        try {
+          ctx.ui.setWidget("multivision", undefined);
+          ctx.ui.setStatus("multivision", undefined);
+        } catch {
+          /* ignore */
+        }
+      };
+
+      showProgress();
       try {
-        const j = JSON.parse(stdout) as { text: string; provider?: string; model?: string; usage?: unknown };
-        return {
-          content: [{ type: "text", text: j.text }],
-          details: { provider: j.provider ?? "unknown", model: j.model ?? "unknown", usage: j.usage ?? null },
-        };
-      } catch {
-        return { content: [{ type: "text", text: stdout || "（空输出）" }], details: {} };
+        const { ok, stdout, stderr } = await runVision(cfg.visionScript, args, timeoutS * 1000 + 60_000);
+        if (!ok) {
+          return {
+            content: [{ type: "text", text: `视觉分析失败：${stderr || "未知错误"}` }],
+            details: {},
+          };
+        }
+        try {
+          const j = JSON.parse(stdout) as { text: string; provider?: string; model?: string; usage?: unknown };
+          return {
+            content: [{ type: "text", text: j.text }],
+            details: { provider: j.provider ?? "unknown", model: j.model ?? "unknown", usage: j.usage ?? null },
+          };
+        } catch {
+          return { content: [{ type: "text", text: stdout || "（空输出）" }], details: {} };
+        }
+      } finally {
+        clearProgress();
       }
     },
   });

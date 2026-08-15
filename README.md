@@ -138,6 +138,18 @@ Or force it in a session with any image path:
 multivision(imagePath="screenshot.png", prompt="识别图中所有文字")
 ```
 
+### Progress display
+
+While the analysis is running, the extension shows live progress via the extension UI protocol (`ctx.ui.setWidget` / `ctx.ui.setStatus`): a widget panel and a status-bar entry in both pi TUI and pi-web:
+
+```
+◆ 视觉分析中
+  图片: screenshot.png
+  模型链请求中（超时 240s，失败自动切换）
+```
+
+The widget/status is cleared automatically when the tool finishes.
+
 ## Agent Usage Guidelines（模型行为准则）
 
 Text-only models **must call `multivision` immediately, without waiting for the user to ask**, when any of these triggers occur:
