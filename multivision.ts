@@ -103,13 +103,40 @@ function runVision(script: string, args: string[], timeoutMs: number): Promise<{
 }
 
 export default function (pi: ExtensionAPI) {
+  // 视觉能力判断：模型声明 input 包含 "image" 时原生支持识图，
+  // 此时图片附件对模型直接可见，不应再调用 multivision 重复分析
+  const modelSupportsVision = (model: { input?: string[] } | undefined): boolean =>
+    Array.isArray(model?.input) && model.input.includes("image");
+
+  // 按当前模型能力同步 multivision 的激活状态：
+  // 模型有视觉 → 停用（模型看不到该工具）；模型无视觉 → 确保启用
+  const syncMultivisionTool = (model: { input?: string[] } | undefined) => {
+    try {
+      const active = pi.getActiveTools();
+      const enabled = active.includes("multivision");
+      const vision = modelSupportsVision(model);
+      if (vision && enabled) {
+        pi.setActiveTools(active.filter((name) => name !== "multivision"));
+      } else if (!vision && !enabled) {
+        pi.setActiveTools([...active, "multivision"]);
+      }
+    } catch {
+      /* 工具列表不可用时忽略 */
+    }
+  };
+
+  pi.on("session_start", (_event, ctx) => syncMultivisionTool(ctx.model));
+  pi.on("model_select", (event) => syncMultivisionTool(event.model));
+
   pi.registerTool({
     name: "multivision",
     label: "Multivision",
     promptSnippet:
       "Analyze local images via a vision model chain: describe content, OCR text, inspect UI screenshots, charts and diagrams. Use automatically when images are attached, an image path/URL is given, or the user asks to view/inspect/compare images.",
     description:
-      "分析本地图片文件并返回文字描述，是本模型的'眼睛'。" +
+      "分析本地图片文件并返回文字描述。注意：仅当图片对你（模型）不可见时才调用本工具——" +
+      "例如图片以 'image omitted / model does not support images / 图片已省略' 标记出现，或你只能拿到图片路径。" +
+      "若图片已作为附件直接可见、你能直接看到图片内容，说明当前模型原生支持识图，禁止调用本工具。" +
       "【强制触发条件：出现以下任一情况必须立即调用本工具，无需用户提醒】" +
       "1) 消息中的图片显示为 image omitted / model does not support images / 图片已省略 等标记（说明图片被省略，你无法直接查看）；" +
       "2) 用户提供了图片路径、图片 URL，或要求查看截图/图表/识图/OCR；" +
