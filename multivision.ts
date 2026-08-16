@@ -106,6 +106,8 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "multivision",
     label: "Multivision",
+    promptSnippet:
+      "Analyze local images via a vision model chain: describe content, OCR text, inspect UI screenshots, charts and diagrams. Use automatically when images are attached, an image path/URL is given, or the user asks to view/inspect/compare images.",
     description:
       "分析本地图片文件并返回文字描述，是本模型的'眼睛'。" +
       "【强制触发条件：出现以下任一情况必须立即调用本工具，无需用户提醒】" +

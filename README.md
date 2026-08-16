@@ -152,6 +152,8 @@ The widget/status is cleared automatically when the tool finishes.
 
 ## Agent Usage Guidelines（模型行为准则）
 
+The tool registers a `promptSnippet`, so it appears in the system prompt's **Available tools** list automatically — models see it without the user naming it explicitly.
+
 Text-only models **must call `multivision` immediately, without waiting for the user to ask**, when any of these triggers occur:
 
 1. **Image omitted from context** — the message shows `image omitted: model does not support images`, `(image omitted)`, `[图片已省略]`, or similar markers. This means the image was stripped because the model cannot see it natively.
