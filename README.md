@@ -22,11 +22,11 @@ Some of the best coding models are blind. You paste a screenshot, a UI mock, or 
 
 `pi-multivision` registers a **native tool** (`multivision`) that any text-only model can call directly — no remembering to use a skill, no shelling out manually. The extension hands the image to a vision-capable model and returns the text description as the tool result.
 
-- **🔌 Multi-backend with auto-fallback** — Step-3.7-Flash (ModelScope) → GLM-4.6V-Flash (Zhipu) → Qwen3.6-Chat (USTC-LLM). If a backend is rate-limited, times out, or returns an empty response, the next one is tried automatically.
+- **🔌 Multi-backend with auto-fallback** — providers are tried in config order (e.g. Step-3.7-Flash → GLM-4.6V-Flash → Qwen-Chat). If a backend is rate-limited, times out, or returns an empty response, the next one is tried automatically.
 - **⏱️ Timeout & retry** — per-request timeout (240s default, configurable), rate-limit backoff, and empty-response fallback. Slow models fail fast with a clear message instead of hanging.
 - **🖼️ Single or multiple images** — `imagePath` for one, `imagePaths` for comparison across several.
 - **🧠 Model-driven** — the tool is described in the model's tool list, so the agent picks it automatically whenever it needs to "see" an image.
-- **🔧 BYO vision script** — the extension shells out to a small vision script (default `~/.agents/skills/vision/vision.js`), overridable via the `VISION_SCRIPT` env var. Bring your own providers/keys.
+- **📦 Bundled vision script** — the package ships a ready-to-use `vision.js` (OpenAI-compatible, multi-provider fallback). Bring-your-own script is still supported for advanced setups.
 
 ## Installation
 
@@ -44,12 +44,34 @@ pi install git:github.com/like-attract/pi-multivision
 
 Then `/reload` (or restart pi).
 
+## Quick start（1 分钟）
+
+### 方式一（推荐）：`.env` 文件
+
+Create `~/.pi/agent/pi-multivision.env` with at least one vision model (OpenAI-compatible):
+
+```
+VISION_MODEL_1_NAME=glm
+VISION_MODEL_1_URL=https://open.bigmodel.cn/api/paas/v4
+VISION_MODEL_1_MODEL=glm-4.6v-flash
+VISION_MODEL_1_KEY=your_api_key_here
+```
+
+- Up to 10 models: `VISION_MODEL_1_*`, `VISION_MODEL_2_*`, … — **the number is the fallback order** (failed providers are skipped automatically).
+- With a `.env` present, the extension auto-uses the **bundled `vision.js`** — no other config needed.
+- Free/low-cost vision models that work out of the box:
+  - GLM-4.6V-Flash — `https://open.bigmodel.cn/api/paas/v4`
+  - Step-3.7-Flash — `https://api-inference.modelscope.cn/v1` (model id `stepfun-ai/Step-3.7-Flash`)
+
+### 方式二（高级）：JSON + 自定义脚本
+
+If you need a custom script or per-project model files, use a JSON config — see [Requirements & Configuration](#requirements--configuration) below. A template with common providers is included as `config.example.json` in the package.
+
 ## Requirements & Configuration
 
-> **First use requires explicit configuration.** pi-multivision ships with **no default model** —
-> your providers/keys stay in your own config files, nothing is baked into the extension.
+> **First use requires at least one vision model.** The extension ships with a bundled script but **no default API keys** — your providers/keys stay in your own `.env` or JSON config.
 
-### 1. Extension config (where the vision script lives)
+### A. Extension config (where the vision script lives)
 
 The extension reads a JSON config, from either:
 
@@ -66,15 +88,15 @@ The extension reads a JSON config, from either:
 
 | Field | Required | Meaning |
 |-------|----------|---------|
-| `visionScript` | ✅ | Script that turns image paths into a text description (protocol below) |
-| `configPath` | — | Passed to the script as `--config` (model selection & order, see §2) |
+| `visionScript` | ✅ (unless `.env` is used) | Script that turns image paths into a text description (protocol below); defaults to the bundled `vision.js` when a `.env` exists |
+| `configPath` | — | Passed to the script as `--config` (model selection & order, see §B) |
 | `timeout` | — | Per-request timeout in seconds (default 240) |
 
-If no config is found, the tool returns a step-by-step setup guide instead of guessing.
+If no config and no `.env` is found, the tool returns a step-by-step setup guide instead of guessing.
 
-### 2. Model selection & order (in the script's config)
+### B. Model selection & order (in the script's config)
 
-The vision script reads its own model config (the file you pass via `configPath`).
+The vision script reads its model config from (in priority order): `--config` JSON → `.env` (`VISION_MODEL_N_*`) → `config.json` next to the script.
 **The key order of `providers` is the try order** — failures automatically fall through to the next:
 
 ```json
@@ -86,7 +108,7 @@ The vision script reads its own model config (the file you pass via `configPath`
 }
 ```
 
-### 3. vision script protocol
+### C. vision script protocol
 
 The script must accept:
 

@@ -1,7 +1,7 @@
 {
   "name": "pi-multivision",
-  "version": "0.2.4",
-  "description": "Give text-only pi models vision — a native vision_tool that analyzes images via a multi-backend vision model chain (Step-3.7-Flash → GLM → Qwen) with auto-fallback, timeout and retry",
+  "version": "0.3.0",
+  "description": "Give text-only pi models vision — a native vision tool with a bundled vision script and a multi-backend model chain (auto-fallback, timeout, retry). Configure models via .env, JSON, or a custom script.",
   "type": "module",
   "author": "like_attract",
   "license": "MIT",
@@ -28,6 +28,8 @@
   ],
   "files": [
     "multivision.ts",
+    "vision.js",
+    "config.example.json",
     "README.md",
     "LICENSE"
   ],

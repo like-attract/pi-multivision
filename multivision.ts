@@ -38,6 +38,7 @@ import { execFile } from "node:child_process";
 import { homedir } from "node:os";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 interface ExtConfig {
   visionScript: string;
@@ -46,8 +47,11 @@ interface ExtConfig {
 }
 
 const DEFAULT_CONFIG = join(homedir(), ".pi", "agent", "pi-multivision.json");
+const DEFAULT_ENV = join(homedir(), ".pi", "agent", "pi-multivision.env");
+const BUILTIN_VISION = fileURLToPath(new URL("./vision.js", import.meta.url));
 
 function loadExtConfig(): { cfg: ExtConfig | null; error: string | null } {
+  // 1. 显式 JSON 配置（VISION_CONFIG 环境变量 → 默认 ~/.pi/agent/pi-multivision.json）
   const envPath = process.env.VISION_CONFIG;
   const candidates: string[] = [];
   if (envPath) candidates.push(envPath);
@@ -64,27 +68,38 @@ function loadExtConfig(): { cfg: ExtConfig | null; error: string | null } {
       return { cfg: null, error: `配置文件解析失败 (${p}): ${(e as Error).message}` };
     }
   }
+  // 2. 无 JSON 但有 .env（VISION_ENV → 默认 ~/.pi/agent/pi-multivision.env）时，
+  //    使用包内置 vision 脚本，脚本自动读取 .env 中的模型链
+  const envFile = process.env.VISION_ENV || DEFAULT_ENV;
+  if (existsSync(BUILTIN_VISION) && existsSync(envFile)) {
+    return { cfg: { visionScript: BUILTIN_VISION, timeout: 240 }, error: null };
+  }
   return { cfg: null, error: null };
 }
 
 function firstUseGuide(): string {
   return [
-    "⚠️ 未检测到 pi-multivision 配置（首次使用需要显式指定视觉模型，扩展不内置默认模型）：",
+    "⚠️ 未检测到 pi-multivision 配置。首次使用需提供至少一个识图模型（OpenAI 兼容视觉 API），两种方式任选：",
     "",
-    "1) 创建配置文件（二选一）：",
-    "   - 环境变量 VISION_CONFIG 指向任意路径",
-    "   - 默认位置 ~/.pi/agent/pi-multivision.json",
+    "【方式一 · 推荐 · 1 分钟】.env 文件",
+    "创建 ~/.pi/agent/pi-multivision.env（或设置环境变量 VISION_ENV 指向其他路径）：",
     "",
-    '   {"visionScript": "/path/to/vision.js", "configPath": "/path/to/models.json", "timeout": 240}',
-    "   - visionScript（必填）：图片→文字 的脚本，协议：",
-    '     node vision.js <图片...> --prompt "问题" --json [--timeout 秒] → 输出 { "text": "...", "provider": "...", "model": "..." }',
-    "   - configPath（可选）：传给脚本的 --config，用于选择模型及顺序",
-    "   - timeout（可选）：单次请求超时秒数，默认 240",
+    "  VISION_MODEL_1_NAME=glm",
+    "  VISION_MODEL_1_URL=https://open.bigmodel.cn/api/paas/v4",
+    "  VISION_MODEL_1_MODEL=glm-4.6v-flash",
+    "  VISION_MODEL_1_KEY=你的APIkey",
     "",
-    "2) 模型选择与顺序在 configPath 文件里配置（providers 键的顺序即尝试顺序，失败自动切下一个）：",
-    '   {"providers": {"first": {"baseUrl": "...", "apiKey": "...", "defaultModel": "...", "models": ["..."]}, "second": {...}}}',
+    "  可配置多个形成自动切换的模型链：VISION_MODEL_2_URL/_KEY/_MODEL（序号即尝试顺序，前面失败自动切下一个）。",
+    "  免费/低价模型推荐：GLM-4.6V-Flash（https://open.bigmodel.cn/api/paas/v4）、Step-3.7-Flash（ModelScope 网关）。",
     "",
-    "3) 配置完成后 /reload 即可使用。",
+    "【方式二 · 高级】JSON + 自定义脚本",
+    "创建 ~/.pi/agent/pi-multivision.json：",
+    '  {"visionScript": "/path/to/vision.js", "configPath": "/path/to/models.json", "timeout": 240}',
+    "  visionScript（必填）：图片→文字脚本，协议：node vision.js <图片...> --prompt \"问题\" --json [--timeout 秒] → 输出 { \"text\": \"...\", \"provider\": \"...\", \"model\": \"...\" }",
+    "  模型配置在 configPath 文件里（providers 键序 = 尝试顺序）：{\"providers\": {\"first\": {\"baseUrl\": \"...\", \"apiKey\": \"...\", \"defaultModel\": \"...\", \"models\": [\"...\"]}}}",
+    "  可直接复制包内 config.example.json（Step/GLM/Qwen 模板）填入你的 key。",
+    "",
+    "配置完成后重新发起即可，无需 /reload。",
   ].join("\n");
 }
 
