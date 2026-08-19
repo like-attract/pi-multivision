@@ -2,35 +2,23 @@
  * pi-multivision — 把视觉分析能力包装成 pi 原生工具（配置化版）
  *
  * 让不支持视觉的主模型（如 DeepSeek）通过工具调用直接看图：
- * 模型调用 multivision(imagePath, prompt) → 扩展调用 vision 脚本
- * → 按用户配置文件指定的模型链及顺序尝试（失败自动切换下一个）
+ * 模型调用 multivision(imagePath, prompt) → 扩展调用包内置 vision 脚本
+ * → 按 .env 配置的模型链及顺序尝试（失败自动切换下一个）
  * → 超时/重试/空响应兜底 → 返回视觉模型的文字描述。
  *
- * ## 配置（首次使用必须配置，扩展不内置任何默认模型）
+ * ## 配置（统一使用 .env，首次使用必须配置，扩展不内置任何模型 key）
  *
- * 扩展读取 JSON 配置文件，来源优先级：
- *   1. 环境变量 VISION_CONFIG 指向的文件
- *   2. ~/.pi/agent/pi-multivision.json
+ * 配置来源：环境变量 VISION_ENV 指向的文件，或默认 ~/.pi/agent/pi-multivision.env
  *
  * 配置格式：
- * {
- *   "visionScript": "/path/to/vision.js",   // 必填：图片→文字 的脚本
- *   "configPath":   "/path/to/models.json", // 可选：传给脚本 --config（模型选择/顺序）
- *   "timeout":      240                     // 可选：单次请求超时秒数，默认 240
- * }
+ *   VISION_MODEL_1_NAME=glm          // 可选：模型链名称（用于显示）
+ *   VISION_MODEL_1_URL=...           // 必填：OpenAI 兼容 baseUrl
+ *   VISION_MODEL_1_MODEL=glm-4.6v-flash // 必填：模型名
+ *   VISION_MODEL_1_KEY=...           // 必填：API key
+ *   VISION_MODEL_2_URL=...           // 可选：最多 10 个，序号=失败切换顺序
+ *   VISION_TIMEOUT=240               // 可选：单次请求超时秒数，默认 240
  *
- * vision 脚本协议（OpenAI 兼容视觉 API）：
- *   node vision.js <图片路径...> --prompt "问题" --json [--timeout 秒] [--config 路径]
- *   输出 JSON：{ "text": "...", "provider": "...", "model": "...", "usage": {...} }
- *
- * 模型选择与顺序在 configPath 指向的文件中配置：
- *   { "providers": {
- *       "first":  { "baseUrl": "...", "apiKey": "...", "defaultModel": "...", "models": [...] },
- *       "second": { ... }
- *     } }
- *   providers 对象键的顺序 = 尝试顺序，前面的失败自动切换下一个。
- *
- * 安装：pi install npm:pi-multivision
+ * 安装：pi install npm:pi-multivision（包内置 vision.js，无需自备脚本）
  * ============================================================ */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
@@ -42,62 +30,37 @@ import { fileURLToPath } from "node:url";
 
 interface ExtConfig {
   visionScript: string;
-  configPath?: string;
   timeout?: number;
 }
 
-const DEFAULT_CONFIG = join(homedir(), ".pi", "agent", "pi-multivision.json");
 const DEFAULT_ENV = join(homedir(), ".pi", "agent", "pi-multivision.env");
 const BUILTIN_VISION = fileURLToPath(new URL("./vision.js", import.meta.url));
 
 function loadExtConfig(): { cfg: ExtConfig | null; error: string | null } {
-  // 1. 显式 JSON 配置（VISION_CONFIG 环境变量 → 默认 ~/.pi/agent/pi-multivision.json）
-  const envPath = process.env.VISION_CONFIG;
-  const candidates: string[] = [];
-  if (envPath) candidates.push(envPath);
-  candidates.push(DEFAULT_CONFIG);
-  for (const p of candidates) {
-    if (!existsSync(p)) continue;
-    try {
-      const cfg = JSON.parse(readFileSync(p, "utf8")) as Partial<ExtConfig>;
-      if (!cfg.visionScript || typeof cfg.visionScript !== "string") {
-        return { cfg: null, error: `配置文件缺少 visionScript 字段: ${p}` };
-      }
-      return { cfg: cfg as ExtConfig, error: null };
-    } catch (e) {
-      return { cfg: null, error: `配置文件解析失败 (${p}): ${(e as Error).message}` };
-    }
-  }
-  // 2. 无 JSON 但有 .env（VISION_ENV → 默认 ~/.pi/agent/pi-multivision.env）时，
-  //    使用包内置 vision 脚本，脚本自动读取 .env 中的模型链
+  // 统一的配置来源：仅 .env（VISION_ENV 环境变量 → 默认 ~/.pi/agent/pi-multivision.env）
   const envFile = process.env.VISION_ENV || DEFAULT_ENV;
-  if (existsSync(BUILTIN_VISION) && existsSync(envFile)) {
-    return { cfg: { visionScript: BUILTIN_VISION, timeout: 240 }, error: null };
+  if (!existsSync(envFile)) {
+    return { cfg: null, error: null };
   }
-  return { cfg: null, error: null };
+  if (!existsSync(BUILTIN_VISION)) {
+    return { cfg: null, error: "包内置 vision 脚本缺失（安装不完整，请重新 pi install）" };
+  }
+  return { cfg: { visionScript: BUILTIN_VISION }, error: null };
 }
 
 function firstUseGuide(): string {
   return [
-    "⚠️ 未检测到 pi-multivision 配置。首次使用需提供至少一个识图模型（OpenAI 兼容视觉 API），两种方式任选：",
-    "",
-    "【方式一 · 推荐 · 1 分钟】.env 文件",
-    "创建 ~/.pi/agent/pi-multivision.env（或设置环境变量 VISION_ENV 指向其他路径）：",
+    "⚠️ 未检测到 pi-multivision 配置。首次使用请创建 ~/.pi/agent/pi-multivision.env（或设置环境变量 VISION_ENV 指向其他路径）：",
     "",
     "  VISION_MODEL_1_NAME=glm",
     "  VISION_MODEL_1_URL=https://open.bigmodel.cn/api/paas/v4",
     "  VISION_MODEL_1_MODEL=glm-4.6v-flash",
-    "  VISION_MODEL_1_KEY=你的APIkey",
+    "  VISION_MODEL_1_KEY=<你的API key>",
     "",
-    "  可配置多个形成自动切换的模型链：VISION_MODEL_2_URL/_KEY/_MODEL（序号即尝试顺序，前面失败自动切下一个）。",
-    "  免费/低价模型推荐：GLM-4.6V-Flash（https://open.bigmodel.cn/api/paas/v4）、Step-3.7-Flash（ModelScope 网关）。",
-    "",
-    "【方式二 · 高级】JSON + 自定义脚本",
-    "创建 ~/.pi/agent/pi-multivision.json：",
-    '  {"visionScript": "/path/to/vision.js", "configPath": "/path/to/models.json", "timeout": 240}',
-    "  visionScript（必填）：图片→文字脚本，协议：node vision.js <图片...> --prompt \"问题\" --json [--timeout 秒] → 输出 { \"text\": \"...\", \"provider\": \"...\", \"model\": \"...\" }",
-    "  模型配置在 configPath 文件里（providers 键序 = 尝试顺序）：{\"providers\": {\"first\": {\"baseUrl\": \"...\", \"apiKey\": \"...\", \"defaultModel\": \"...\", \"models\": [\"...\"]}}}",
-    "  可直接复制包内 config.example.json（Step/GLM/Qwen 模板）填入你的 key。",
+    "  最多 10 个模型：VISION_MODEL_2_URL / _KEY / _MODEL ...（序号即失败切换顺序，前面失败自动切下一个）。",
+    "  可选：VISION_TIMEOUT=240（单次请求超时秒数，默认 240）。",
+    "  包内附带 pi-multivision.env.example 模板（GLM / Qwen / Step 占位）。",
+    "  免费/低价视觉模型推荐：GLM-4.6V-Flash（https://open.bigmodel.cn/api/paas/v4）、Step-3.7-Flash（ModelScope 网关）。",
     "",
     "配置完成后重新发起即可，无需 /reload。",
   ].join("\n");
@@ -159,7 +122,7 @@ export default function (pi: ExtensionAPI) {
       "4) 用户问'这是什么/看看这个'而上下文里有图片附件。" +
       "若没有图片路径，先搜索 Temp 目录、会话目录、当前目录中的 png/jpg/webp 截图再调用；找不到则主动询问用户。" +
       "用法：传入图片路径（相对或绝对）和一个问题，工具会按 pi-multivision 配置的视觉模型链" +
-      "（见 ~/.pi/agent/pi-multivision.json 或 VISION_CONFIG）分析图片并返回结果。" +
+      "（见 ~/.pi/agent/pi-multivision.env 或 VISION_ENV）分析图片并返回结果。" +
       "适合：描述图片内容、OCR 识别文字、检查 UI 截图、分析图表/流程图。",
     parameters: Type.Object({
       prompt: Type.String({
@@ -182,7 +145,7 @@ export default function (pi: ExtensionAPI) {
       }
       if (!existsSync(cfg.visionScript)) {
         return {
-          content: [{ type: "text", text: `visionScript 不存在: ${cfg.visionScript}\n请检查配置文件（VISION_CONFIG 或 ~/.pi/agent/pi-multivision.json）` }],
+          content: [{ type: "text", text: `visionScript 不存在: ${cfg.visionScript}\n安装不完整，请重新 pi install npm:pi-multivision` }],
           details: {},
         };
       }
@@ -201,7 +164,6 @@ export default function (pi: ExtensionAPI) {
 
       const timeoutS = cfg.timeout || 240;
       const args = [...paths, "--prompt", prompt, "--json", "--timeout", String(timeoutS)];
-      if (cfg.configPath) args.push("--config", cfg.configPath);
 
       // 进度显示：pi-web/TUI 支持 setWidget（编辑器上方/下方）与 setStatus（状态栏）
       const names = paths.map((p) => p.split(/[\\/]/).pop() ?? p).join(", ");

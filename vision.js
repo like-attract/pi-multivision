@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 // Vision — 调用视觉大模型描述/分析图片（多后端模型链，失败自动切换）
-// 用法: node vision.js <图片路径或URL> [更多图片...] [--prompt "问题"] [--provider qwen|glm] [--model 模型名] [--json] [--config 配置文件路径] [--env .env路径]
+// 用法: node vision.js <图片路径或URL> [更多图片...] [--prompt "问题"] [--provider qwen|glm] [--model 模型名] [--json] [--env .env路径]
 //
-// 配置来源优先级：
-//   1. --config 显式指定的 JSON 配置文件（providers 对象，含 baseUrl/apiKey/defaultModel/models）
-//   2. .env 文件（VISION_MODEL_1_URL/_KEY/_MODEL/_NAME，序号即尝试顺序；默认读 ~/.pi/agent/pi-multivision.env）
-//   3. 脚本同目录的 config.json
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+// 配置来源：.env 文件（VISION_MODEL_N_URL/_KEY/_MODEL/_NAME，序号即尝试顺序；
+// 默认读取 ~/.pi/agent/pi-multivision.env，可用 --env 覆盖）
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+
+const __dirname = import.meta.dirname ?? path.dirname(new URL(import.meta.url).pathname);
+
+const DEFAULT_ENV = path.join(os.homedir(), '.pi', 'agent', 'pi-multivision.env');
 
 function loadEnvProviders(envPath) {
   if (!envPath || !fs.existsSync(envPath)) return null;
@@ -36,44 +38,21 @@ function loadEnvProviders(envPath) {
     providers[name] = { name, baseUrl: url, apiKey: key, defaultModel: model, models: [model] };
     found = true;
   }
-  return found ? providers : null;
+  return found ? { providers, timeout: parseFloat(vars.VISION_TIMEOUT) || 0 } : null;
 }
 
-function loadConfig(cfgPath, envPath) {
-  // 1. 显式 --config
-  if (cfgPath) {
-    if (!fs.existsSync(cfgPath)) { console.error(`配置文件不存在: ${cfgPath}`); process.exit(1); }
-    try { return JSON.parse(fs.readFileSync(cfgPath, 'utf8')); }
-    catch (e) { console.error(`配置文件解析失败 (${cfgPath}): ` + e.message); process.exit(1); }
+function loadConfig(envPath) {
+  const candidates = [envPath, DEFAULT_ENV, path.join(__dirname, '.env')].filter(Boolean);
+  for (const p of candidates) {
+    const loaded = loadEnvProviders(p);
+    if (loaded) return loaded;
   }
-  // 2. .env（显式路径 → 默认 ~/.pi/agent/pi-multivision.env → 脚本同目录 .env）
-  const envCandidates = [
-    envPath,
-    path.join(os.homedir(), '.pi', 'agent', 'pi-multivision.env'),
-    path.join(__dirname, '.env'),
-  ].filter(Boolean);
-  for (const p of envCandidates) {
-    const providers = loadEnvProviders(p);
-    if (providers) return { providers, _source: `env:${p}` };
-  }
-  // 3. 同目录 config.json（兼容旧用法）
-  const p = path.join(__dirname, 'config.json');
-  if (fs.existsSync(p)) {
-    try { return JSON.parse(fs.readFileSync(p, 'utf8')); }
-    catch (e) { console.error(`配置文件解析失败 (${p}): ` + e.message); process.exit(1); }
-  }
-  // 环境变量覆盖 GLM key
-  if (process.env.GLM_API_KEY) {
-    const cfg = { providers: {} };
-    cfg.providers.glm = { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', apiKey: process.env.GLM_API_KEY, defaultModel: 'glm-4.6v-flash', models: ['glm-4.6v-flash'] };
-    return cfg;
-  }
-  return { providers: {} };
+  return { providers: {}, timeout: 0 };
 }
 
 function parseArgs(argv) {
   const files = [];
-  let prompt = null, model = null, provider = null, json = false, maxTokens = 1500, timeout = 240000, config = null, env = null;
+  let prompt = null, model = null, provider = null, json = false, maxTokens = 1500, timeout = 0, env = null;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--prompt' || a === '-p') prompt = argv[++i];
@@ -82,11 +61,10 @@ function parseArgs(argv) {
     else if (a === '--json') json = true;
     else if (a === '--max-tokens') maxTokens = parseInt(argv[++i], 10) || 1500;
     else if (a === '--timeout') timeout = parseInt(argv[++i], 10) * 1000;
-    else if (a === '--config') config = argv[++i];
     else if (a === '--env') env = argv[++i];
     else files.push(a);
   }
-  return { files, prompt, model, provider, json, maxTokens, timeout, config, env };
+  return { files, prompt, model, provider, json, maxTokens, timeout, env };
 }
 
 function toDataUrl(file) {
@@ -145,16 +123,16 @@ async function callApi(provName, provCfg, model, content, maxTokens, timeoutMs) 
 }
 
 async function main() {
-  const { files, prompt, model, provider, json, maxTokens, timeout, config, env } = parseArgs(process.argv.slice(2));
-  const cfg = loadConfig(config, env);
+  const { files, prompt, model, provider, json, maxTokens, timeout, env } = parseArgs(process.argv.slice(2));
+  const cfg = loadConfig(env);
   const providers = cfg.providers || {};
   const names = Object.keys(providers);
   if (names.length === 0) {
-    console.error('未配置任何视觉模型。\n  - 方式一：创建 ~/.pi/agent/pi-multivision.env，填写 VISION_MODEL_1_URL / VISION_MODEL_1_KEY / VISION_MODEL_1_MODEL（序号=尝试顺序）\n  - 方式二：用 --config 指定 JSON 配置（providers 对象，见包内 config.example.json）');
+    console.error('未配置任何视觉模型。请创建 ~/.pi/agent/pi-multivision.env，填写 VISION_MODEL_1_URL / VISION_MODEL_1_KEY / VISION_MODEL_1_MODEL（序号=尝试顺序），或用 --env 指向其他 .env。');
     process.exit(1);
   }
   if (files.length === 0) {
-    console.error('用法: node vision.js <图片路径或URL> [更多图片...] [--prompt "问题"] [--provider qwen|glm] [--model 模型名] [--json] [--config 路径] [--env 路径]');
+    console.error('用法: node vision.js <图片路径或URL> [更多图片...] [--prompt "问题"] [--provider qwen|glm] [--model 模型名] [--json] [--env 路径]');
     process.exit(1);
   }
 
@@ -182,10 +160,12 @@ async function main() {
   content.push({ type: 'text', text: prompt || '请详细描述这张图片的内容，包括所有可见的文字、物体、界面元素、布局和颜色。' });
   for (const f of files) content.push({ type: 'image_url', image_url: { url: await toDataUrl(f) } });
 
+  // 超时优先级：CLI --timeout > .env VISION_TIMEOUT > 默认 240s
+  const effTimeout = timeout > 0 ? timeout : (cfg.timeout > 0 ? cfg.timeout * 1000 : 240000);
   const errors = [];
   for (const [pn, m] of candidates) {
     try {
-      const res = await callApi(pn, providers[pn], m, content, maxTokens, timeout);
+      const res = await callApi(pn, providers[pn], m, content, maxTokens, effTimeout);
       const text = (res.text || '').trim();
       if (!text) {
         // 偶发空响应：视为失败，继续尝试下一候选

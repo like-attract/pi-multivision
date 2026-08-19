@@ -29,7 +29,7 @@
   "files": [
     "multivision.ts",
     "vision.js",
-    "config.example.json",
+    "pi-multivision.env.example",
     "README.md",
     "LICENSE"
   ],
